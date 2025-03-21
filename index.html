@@ -1,42 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa">
 <head>
-    <meta charset="UTF-8">
-    <title>Snake Game with Three.js</title>
-    <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        canvas { display: block; }
-
-        #overlay {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background-color: rgba(0, 0, 0, 0.6);
-            color: white;
-            font-size: 2rem;
-            display: none;
-            z-index: 10;
-        }
-
-        #overlay button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            font-size: 1rem;
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>بازی 3D پک‌من</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="overlay">
-        <div>Game Over</div>
-        <button onclick="restartGame()">Replay</button>
-    </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="snake.js"></script>
+  <!-- بارگذاری کتابخانه Three.js از CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
