@@ -22,6 +22,10 @@ const textureURLs = [
   'https://source.unsplash.com/300x200/?urban,modern'
 ];
 
+// تنظیم crossOrigin برای TextureLoader جهت حل مشکل CORS
+const textureLoader = new THREE.TextureLoader();
+textureLoader.setCrossOrigin("anonymous");
+
 // تعریف نقشه بازی به صورت آرایه (1: ساختمان، 2: خوراکی، 0: فضای خالی)
 const maze = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -33,7 +37,6 @@ const maze = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1]
 ];
 const wallSize = 4;
-const textureLoader = new THREE.TextureLoader();
 
 // ایجاد ساختمان‌ها و خوراکی‌ها بر اساس آرایه maze
 for (let i = 0; i < maze.length; i++) {
