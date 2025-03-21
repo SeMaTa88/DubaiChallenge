@@ -1,144 +1,119 @@
-let scene, camera, renderer, snakeMesh, foodMesh;
-let snake, direction, food, score;
-let gridSize = 10;
-let snakeSize = 1;
-let moveInterval;
-let isGameOver = false;
+// script.js
 
-const overlay = document.getElementById("overlay");
+// تنظیمات صحنه، دوربین و رندرر
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-function init() {
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+// گروه‌های اصلی برای مدیریت المان‌های بازی
+const mazeGroup = new THREE.Group();
+const pelletGroup = new THREE.Group();
+scene.add(mazeGroup);
+scene.add(pelletGroup);
 
-    camera.position.z = 20;
+// تعریف نقشه بازی به صورت آرایه (1: دیوار، 2: خوراکی، 0: فضای خالی)
+const maze = [
+  [1, 1, 1, 1, 1, 1, 1, 1, 1],
+  [1, 2, 2, 2, 1, 2, 2, 2, 1],
+  [1, 2, 1, 2, 1, 2, 1, 2, 1],
+  [1, 2, 1, 2, 2, 2, 1, 2, 1],
+  [1, 2, 1, 1, 1, 1, 1, 2, 1],
+  [1, 2, 2, 2, 2, 2, 2, 2, 1],
+  [1, 1, 1, 1, 1, 1, 1, 1, 1]
+];
+const wallSize = 4;
 
-    snakeMesh = new THREE.Group();
-    scene.add(snakeMesh);
-
-    resetGame();
-    animate();
-    moveInterval = setInterval(updateGame, 300); // slower movement
-}
-
-function resetGame() {
-    snake = [{x: 0, y: 0, z: 0}];
-    direction = {x: 1, y: 0, z: 0};
-    score = 0;
-    isGameOver = false;
-
-    snakeMesh.clear();
-    if (foodMesh) {
-        scene.remove(foodMesh);
+// ایجاد دیوارها و خوراکی‌ها بر اساس آرایه maze
+for (let i = 0; i < maze.length; i++) {
+  for (let j = 0; j < maze[i].length; j++) {
+    const x = j * wallSize - (maze[i].length * wallSize) / 2;
+    const z = i * wallSize - (maze.length * wallSize) / 2;
+    if (maze[i][j] === 1) {
+      // ایجاد یک مکعب به عنوان دیوار
+      const geometry = new THREE.BoxGeometry(wallSize, wallSize, wallSize);
+      const material = new THREE.MeshPhongMaterial({ color: 0x0000ff });
+      const wall = new THREE.Mesh(geometry, material);
+      wall.position.set(x, wallSize / 2, z);
+      mazeGroup.add(wall);
+    } else if (maze[i][j] === 2) {
+      // ایجاد یک کره کوچک به عنوان خوراکی
+      const geometry = new THREE.SphereGeometry(0.5, 16, 16);
+      const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      const pellet = new THREE.Mesh(geometry, material);
+      pellet.position.set(x, 1, z);
+      pelletGroup.add(pellet);
     }
-
-    spawnFood();
-    overlay.style.display = "none";
+  }
 }
 
-function spawnFood() {
-    food = {
-        x: Math.floor(Math.random() * gridSize),
-        y: Math.floor(Math.random() * gridSize),
-        z: 0
-    };
-    let foodGeometry = new THREE.BoxGeometry(snakeSize, snakeSize, snakeSize);
-    let foodMaterial = new THREE.MeshBasicMaterial({color: 0xff0000});
-    foodMesh = new THREE.Mesh(foodGeometry, foodMaterial);
-    foodMesh.position.set(food.x, food.y, food.z);
-    scene.add(foodMesh);
+// ایجاد پک‌من (استفاده از کره با برش برای نمایش دهان)
+const pacGeometry = new THREE.SphereGeometry(1.5, 32, 32, Math.PI / 4, Math.PI * 1.5);
+const pacMaterial = new THREE.MeshPhongMaterial({ color: 0xffd700 });
+const pacman = new THREE.Mesh(pacGeometry, pacMaterial);
+pacman.position.set(0, 1.5, 0);
+scene.add(pacman);
+
+// ایجاد چند شبح با رنگ‌های متفاوت
+const ghostColors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff];
+const ghosts = [];
+for (let i = 0; i < ghostColors.length; i++) {
+  const ghostGeometry = new THREE.SphereGeometry(1.5, 32, 32);
+  const ghostMaterial = new THREE.MeshPhongMaterial({ color: ghostColors[i] });
+  const ghost = new THREE.Mesh(ghostGeometry, ghostMaterial);
+  ghost.position.set(-10 + i * 5, 1.5, 10);
+  ghosts.push(ghost);
+  scene.add(ghost);
 }
 
-function updateGame() {
-    if (isGameOver) return;
+// افزودن نورپردازی به صحنه
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+directionalLight.position.set(10, 20, 10);
+scene.add(directionalLight);
 
-    let head = {
-        x: snake[0].x + direction.x,
-        y: snake[0].y + direction.y,
-        z: snake[0].z
-    };
+// تنظیمات اولیه دوربین
+camera.position.set(0, 20, 20);
+camera.lookAt(0, 0, 0);
 
-    // Check wall collision
-    if (head.x < 0 || head.y < 0 || head.x >= gridSize || head.y >= gridSize ||
-        snake.some(part => part.x === head.x && part.y === head.y)) {
-        gameOver();
-        return;
-    }
+// کنترل‌های کیبورد برای حرکت پک‌من
+const keys = {};
+document.addEventListener('keydown', (e) => { keys[e.key] = true; });
+document.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
-    snake.unshift(head);
-
-    if (head.x === food.x && head.y === food.y) {
-        spawnFood();
-        score++;
-    } else {
-        snake.pop();
-    }
-
-    renderSnake();
-}
-
-function renderSnake() {
-    snakeMesh.clear();
-    let snakeGeometry = new THREE.BoxGeometry(snakeSize, snakeSize, snakeSize);
-    let snakeMaterial = new THREE.MeshBasicMaterial({color: 0x00ff00});
-
-    snake.forEach(part => {
-        let segment = new THREE.Mesh(snakeGeometry, snakeMaterial);
-        segment.position.set(part.x, part.y, part.z);
-        snakeMesh.add(segment);
-    });
-}
-
-function gameOver() {
-    isGameOver = true;
-    overlay.style.display = "flex";
-    clearInterval(moveInterval);
-}
-
-function restartGame() {
-    resetGame();
-    moveInterval = setInterval(updateGame, 300);
-}
-
-// Direction control
-document.addEventListener("keydown", e => {
-    if (e.key === "ArrowUp" && direction.y === 0) direction = {x: 0, y: 1, z: 0};
-    if (e.key === "ArrowDown" && direction.y === 0) direction = {x: 0, y: -1, z: 0};
-    if (e.key === "ArrowLeft" && direction.x === 0) direction = {x: -1, y: 0, z: 0};
-    if (e.key === "ArrowRight" && direction.x === 0) direction = {x: 1, y: 0, z: 0};
-});
-
-// Render loop
+// تابع بازی (حلقه انیمیشن)
 function animate() {
-    requestAnimationFrame(animate);
-    renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+
+  // سرعت حرکت پک‌من
+  const speed = 0.2;
+  if (keys['ArrowUp']) pacman.position.z -= speed;
+  if (keys['ArrowDown']) pacman.position.z += speed;
+  if (keys['ArrowLeft']) pacman.position.x -= speed;
+  if (keys['ArrowRight']) pacman.position.x += speed;
+
+  // بررسی برخورد پک‌من با خوراکی‌ها (جمع‌آوری خوراکی در صورت نزدیک شدن)
+  pelletGroup.children.slice().forEach((pellet) => {
+    if (pacman.position.distanceTo(pellet.position) < 2) {
+      pelletGroup.remove(pellet);
+    }
+  });
+
+  // حرکت تصادفی اولیه برای شبح‌ها
+  ghosts.forEach((ghost) => {
+    ghost.position.x += (Math.random() - 0.5) * 0.1;
+    ghost.position.z += (Math.random() - 0.5) * 0.1;
+  });
+
+  renderer.render(scene, camera);
 }
+animate();
 
-init();
-
-addGameBoundary();
-
-function addGameBoundary() {
-    const boundaryMaterial = new THREE.LineBasicMaterial({
-        color: 0x00ffff,
-        linewidth: 2
-    });
-
-    const half = gridSize / 2;
-
-    const points = [
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(gridSize, 0, 0),
-        new THREE.Vector3(gridSize, gridSize, 0),
-        new THREE.Vector3(0, gridSize, 0),
-        new THREE.Vector3(0, 0, 0)
-    ];
-
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const line = new THREE.Line(geometry, boundaryMaterial);
-    line.position.set(0, 0, -0.5); // کمی پایین‌تر تا زیر مار نمایش داده شود
-    scene.add(line);
-}
+// واکنش به تغییر اندازه صفحه
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
