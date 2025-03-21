@@ -1,0 +1,77 @@
+body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: skyblue;
+}
+
+.game-container {
+    position: relative;
+    width: 800px;
+    height: 500px;
+    background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Forest_Background.png/800px-Forest_Background.png') no-repeat center center;
+    background-size: cover;
+    overflow: hidden;
+}
+
+.fire {
+    position: absolute;
+    bottom: 50px;
+    left: 0;
+    height: 40px;
+    width: 5%;
+    background-color: orange;
+    transition: width 1s linear;
+}
+
+.seesaw {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    width: 300px;
+    height: 10px;
+    background: brown;
+    transform-origin: center;
+    transition: transform 0.5s ease-in-out;
+}
+
+.pivot {
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    width: 20px;
+    height: 30px;
+    background: darkred;
+    transform: translateX(-50%);
+}
+
+.animal-queue {
+    position: absolute;
+    bottom: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.left-queue {
+    left: 20px;
+}
+
+.right-queue {
+    right: 20px;
+}
+
+.animal {
+    width: 50px;
+    cursor: pointer;
+}
+
+.balloon {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    font-size: 50px;
+    transform: translateX(-50%);
+}
