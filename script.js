@@ -36,6 +36,8 @@ for (let i = 0; i < maze.length; i++) {
       const material = new THREE.MeshPhongMaterial({ color: 0x0000ff });
       const wall = new THREE.Mesh(geometry, material);
       wall.position.set(x, wallSize / 2, z);
+      // کاهش ضخامت دیوارها در محورهای x و z
+      wall.scale.set(0.5, 1, 0.5);
       mazeGroup.add(wall);
     } else if (maze[i][j] === 2) {
       // ایجاد یک کره کوچک به عنوان خوراکی
