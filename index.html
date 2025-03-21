@@ -1,31 +1,42 @@
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>بازی تعادل حیوانات</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Snake Game with Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 2rem;
+            display: none;
+            z-index: 10;
+        }
+
+        #overlay button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-    <div class="game-container">
-        <div class="background"></div>
-        <div class="fire"></div>
-        <div class="seesaw">
-            <div class="pivot"></div>
-            <div class="left-side"></div>
-            <div class="right-side"></div>
-        </div>
-        <div class="animal-queue left-queue">
-            <img src="https://uploadkon.ir/uploads/ba0b19_25Elephant.png" class="animal" data-weight="5">
-            <img src="https://uploadkon.ir/uploads/423919_25Cow.png" class="animal" data-weight="4">
-            <img src="https://uploadkon.ir/uploads/f77119_25DALL·E-2025-03-20-01-39-38-A-cute-cartoon-fox-with-orange-fur-a-bushy-tail-and-a-friendly-smile-standing-on-a-transparent-background-copy.png" class="animal" data-weight="3">
-        </div>
-        <div class="animal-queue right-queue">
-            <img src="https://uploadkon.ir/uploads/ede219_25DALL·E-2025-03-20-01-39-30-A-cute-cartoon-rabbit-with-large-ears-white-fur-and-a-happy-expression-standing-on-a-transparent-background-copy.png" class="animal" data-weight="2">
-            <img src="https://uploadkon.ir/uploads/2a8a19_25Chicken.png" class="animal" data-weight="1">
-        </div>
-        <div class="balloon">🎈</div>
+    <div id="overlay">
+        <div>Game Over</div>
+        <button onclick="restartGame()">Replay</button>
     </div>
-    <script src="script.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="snake.js"></script>
 </body>
 </html>
