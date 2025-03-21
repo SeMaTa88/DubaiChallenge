@@ -13,7 +13,7 @@ const pelletGroup = new THREE.Group();
 scene.add(mazeGroup);
 scene.add(pelletGroup);
 
-// تعریف نقشه بازی به صورت آرایه (1: دیوار، 2: خوراکی، 0: فضای خالی)
+// تعریف نقشه بازی به صورت آرایه (1: ساختمان، 2: خوراکی، 0: فضای خالی)
 const maze = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1],
   [1, 2, 2, 2, 1, 2, 2, 2, 1],
@@ -25,20 +25,22 @@ const maze = [
 ];
 const wallSize = 4;
 
-// ایجاد دیوارها و خوراکی‌ها بر اساس آرایه maze
+// ایجاد ساختمان‌ها و خوراکی‌ها بر اساس آرایه maze
 for (let i = 0; i < maze.length; i++) {
   for (let j = 0; j < maze[i].length; j++) {
     const x = j * wallSize - (maze[i].length * wallSize) / 2;
     const z = i * wallSize - (maze.length * wallSize) / 2;
     if (maze[i][j] === 1) {
-      // ایجاد یک مکعب به عنوان دیوار
-      const geometry = new THREE.BoxGeometry(wallSize, wallSize, wallSize);
-      const material = new THREE.MeshPhongMaterial({ color: 0x0000ff });
-      const wall = new THREE.Mesh(geometry, material);
-      wall.position.set(x, wallSize / 2, z);
-      // کاهش ضخامت دیوارها در محورهای x و z
-      wall.scale.set(0.5, 1, 0.5);
-      mazeGroup.add(wall);
+      // ایجاد یک ساختمان مدرن و بلند
+      const buildingWidth = wallSize * 0.5; // عرض ساختمان
+      const buildingDepth = wallSize * 0.5; // عمق ساختمان
+      const buildingHeight = 20; // ارتفاع ساختمان
+      const geometry = new THREE.BoxGeometry(buildingWidth, buildingHeight, buildingDepth);
+      // استفاده از یک ماده مدرن با رنگ خاکستری و درخشندگی بیشتر
+      const material = new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 100 });
+      const building = new THREE.Mesh(geometry, material);
+      building.position.set(x, buildingHeight / 2, z);
+      mazeGroup.add(building);
     } else if (maze[i][j] === 2) {
       // ایجاد یک کره کوچک به عنوان خوراکی
       const geometry = new THREE.SphereGeometry(0.5, 16, 16);
@@ -77,7 +79,7 @@ directionalLight.position.set(10, 20, 10);
 scene.add(directionalLight);
 
 // تنظیمات اولیه دوربین
-camera.position.set(0, 20, 20);
+camera.position.set(0, 30, 30);
 camera.lookAt(0, 0, 0);
 
 // کنترل‌های کیبورد برای حرکت پک‌من
