@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>3D City Maze - Coins, Enemies & Game Over</title>
+  <title>3D City Maze - Benz-Style Cars</title>
   <style>
     body {
       margin: 0;
@@ -70,7 +70,8 @@
       0.1,
       1000
     );
-    camera.position.set(0, 80, 0);
+    // Position camera closer for a larger view of objects.
+    camera.position.set(0, 40, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -164,7 +165,7 @@
     }
     scene.add(cityGroup);
     
-    // === Create Streets and Lane Markings ===
+    // === Create Streets and Neon Street Lines ===
     const streetWidth = mapCols * tileSize;
     const streetDepth = mapRows * tileSize;
     const streetGeometry = new THREE.PlaneGeometry(streetWidth, streetDepth);
@@ -174,16 +175,40 @@
     street.position.y = 0.01;
     scene.add(street);
     
-    const laneMarkings = new THREE.Group();
-    const laneGeometry = new THREE.PlaneGeometry(tileSize / 4, tileSize / 2);
-    const laneMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    for (let z = -streetDepth / 2; z < streetDepth / 2; z += tileSize * 2) {
-      const lane = new THREE.Mesh(laneGeometry, laneMaterial);
-      lane.rotation.x = -Math.PI / 2;
-      lane.position.set(0, 0.02, z + tileSize);
-      laneMarkings.add(lane);
+    // For each open street cell, draw neon white lines that follow cell boundaries based on connectivity.
+    const streetLines = new THREE.Group();
+    const originX = - (mapCols * tileSize) / 2;
+    const originZ = - (mapRows * tileSize) / 2;
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const margin = 0.5; // margin inside the cell
+    for (let row = 0; row < mapRows; row++) {
+      for (let col = 0; col < mapCols; col++) {
+        if (cityMap[row][col] !== "#") {
+          const cx = originX + col * tileSize + tileSize / 2;
+          const cz = originZ + row * tileSize + tileSize / 2;
+          let points = [];
+          // Check connectivity in each direction:
+          const leftOpen = col > 0 && cityMap[row][col-1] !== "#";
+          const rightOpen = col < mapCols-1 && cityMap[row][col+1] !== "#";
+          const topOpen = row > 0 && cityMap[row-1][col] !== "#";
+          const bottomOpen = row < mapRows-1 && cityMap[row+1][col] !== "#";
+          if (leftOpen || rightOpen) {
+            points.push(new THREE.Vector3(cx - tileSize/2 + margin, 0.05, cz));
+            points.push(new THREE.Vector3(cx + tileSize/2 - margin, 0.05, cz));
+          }
+          if (topOpen || bottomOpen) {
+            points.push(new THREE.Vector3(cx, 0.05, cz - tileSize/2 + margin));
+            points.push(new THREE.Vector3(cx, 0.05, cz + tileSize/2 - margin));
+          }
+          if (points.length > 0) {
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.LineSegments(geometry, lineMaterial);
+            streetLines.add(line);
+          }
+        }
+      }
     }
-    scene.add(laneMarkings);
+    scene.add(streetLines);
     
     // === Floor (Sidewalks) ===
     const floorGeometry = new THREE.PlaneGeometry(streetWidth, streetDepth);
@@ -193,23 +218,35 @@
     floorMesh.position.y = 0;
     scene.add(floorMesh);
     
-    // === Create Coins (Bitcoin-like) ===
+    // === Create Enhanced Bitcoin Coins ===
     const coinsGroup = new THREE.Group();
-    const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 32);
+    // Coins are 2x bigger.
+    const coinGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 32);
     const coinMaterial = new THREE.MeshPhongMaterial({ 
       color: 0xffd700,
       emissive: 0xffd700,
       emissiveIntensity: 0.6,
       flatShading: true
     });
+    // Add a ring on top for detail.
+    function createCoin() {
+      const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+      coin.rotation.x = 0; // remain flat
+      const ringGeo = new THREE.RingGeometry(0.3, 0.5, 32);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.11;
+      coin.add(ring);
+      return coin;
+    }
     for (let row = 0; row < mapRows; row++) {
       for (let col = 0; col < mapCols; col++) {
         if (cityMap[row][col] !== "#") {
-          if (Math.random() < 0.1) { // 10% chance
-            const coin = new THREE.Mesh(coinGeometry, coinMaterial);
-            coin.rotation.x = Math.PI / 2;
-            coin.position.x = (col - mapCols / 2) * tileSize + tileSize / 2;
-            coin.position.z = (row - mapRows / 2) * tileSize + tileSize / 2;
+          if (Math.random() < 0.1) { // 10% chance per cell
+            const coin = createCoin();
+            coin.position.x = originX + col * tileSize + tileSize / 2;
+            coin.position.z = originZ + row * tileSize + tileSize / 2;
             coin.position.y = 1;
             coinsGroup.add(coin);
           }
@@ -218,59 +255,63 @@
     }
     scene.add(coinsGroup);
     
-    // === Create Modern Highspeed Car (Player's Car) ===
-    function createCar() {
+    // === Create Benz-Style Car Model (Player's Car & Enemy Cars) ===
+    function createBenzCar() {
       const carGroup = new THREE.Group();
       
-      // Car Body (Yellow)
-      const bodyGeometry = new THREE.BoxGeometry(2, 0.5, 4);
+      // Car Body: Longer and more elegant.
+      const bodyGeometry = new THREE.BoxGeometry(3, 0.7, 6);
       const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, flatShading: true });
       const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-      body.position.y = 0.75;
+      body.position.y = 0.9;
       carGroup.add(body);
       
-      // Car Cabin
-      const cabinGeometry = new THREE.BoxGeometry(1.5, 0.5, 2);
-      const cabinMaterial = new THREE.MeshPhongMaterial({ color: 0x333333, flatShading: true, opacity: 0.6, transparent: true });
-      const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
-      cabin.position.set(0, 1.2, 0.2);
-      carGroup.add(cabin);
+      // Car Roof/Cabin: Slightly smaller box.
+      const roofGeometry = new THREE.BoxGeometry(2.5, 0.3, 4);
+      const roofMaterial = new THREE.MeshPhongMaterial({ color: 0x333333, flatShading: true });
+      const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+      roof.position.set(0, 1.4, 0);
+      carGroup.add(roof);
       
-      // Headlights
-      const headlightGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+      // Wheels: Use cylinders.
+      const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 16);
+      const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+      function addWheel(x, z) {
+        const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(x, 0.5, z);
+        carGroup.add(wheel);
+      }
+      addWheel(-1.2, -2.2);
+      addWheel(1.2, -2.2);
+      addWheel(-1.2, 2.2);
+      addWheel(1.2, 2.2);
+      
+      // Headlights: small spheres.
+      const headlightGeometry = new THREE.SphereGeometry(0.2, 16, 16);
       const headlightMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
       function addHeadlight(x, z) {
         const headlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
         headlight.position.set(x, 0.8, z);
         carGroup.add(headlight);
       }
-      addHeadlight(-0.5, -2.1);
-      addHeadlight(0.5, -2.1);
-      
-      // Wheels
-      const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
-      const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
-      function addWheel(x, z) {
-        const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(x, 0.4, z);
-        carGroup.add(wheel);
-      }
-      addWheel(-0.8, -1.5);
-      addWheel(0.8, -1.5);
-      addWheel(-0.8, 1.5);
-      addWheel(0.8, 1.5);
+      addHeadlight(-0.9, -3.1);
+      addHeadlight(0.9, -3.1);
       
       return carGroup;
     }
-    // Place player's car in an open cell.
-    // We'll choose row 5, col 14: x = (14-14)*5+2.5 = 2.5, z = (5-13)*5+2.5 = -37.5.
-    const playerCar = createCar();
-    playerCar.position.set(2.5, 0, -37.5);
+    
+    // === Create Player's Car (Benz-Style, Yellow) ===
+    const playerCar = createBenzCar();
+    // Place player's car at the center of the map.
+    playerCar.position.set(0, 0, 0);
     scene.add(playerCar);
     
-    // === Create Enemy Cars (Ghosts) ===
-    // They move only in cardinal directions (up, down, left, right).
+    // === Create Enemy Cars (Non-Yellow Benz-Style) ===
+    // Colors for enemy cars (excluding yellow).
+    const enemyCarColors = [0xff073a, 0xff66cc, 0x00ffff, 0xffa500];
+    const enemyCars = [];
+    // They move only in cardinal directions.
     const cardinalDirections = [
       new THREE.Vector2(1, 0),
       new THREE.Vector2(-1, 0),
@@ -278,9 +319,10 @@
       new THREE.Vector2(0, -1)
     ];
     function createEnemyCar(color) {
-      const car = createCar();
+      const car = createBenzCar();
+      // Change the car body color (assuming first child is the body).
       car.traverse(child => {
-        if (child.isMesh && child.geometry.type === "BoxGeometry") {
+        if (child.isMesh && child.geometry.parameters && child.geometry.parameters.width === 3) {
           child.material = child.material.clone();
           child.material.color.set(color);
         }
@@ -289,11 +331,10 @@
       car.userData.direction = dir;
       return car;
     }
-    const enemyCarColors = [0xff073a, 0xff66cc, 0x00ffff, 0xffa500];
-    const enemyCars = [];
     for (let i = 0; i < 4; i++) {
       const enemyCar = createEnemyCar(enemyCarColors[i]);
-      enemyCar.position.set(0, 0, (i - 1.5) * 5);
+      // Position enemy cars at various locations near the center.
+      enemyCar.position.set((i - 1.5) * 10, 0, -10);
       enemyCar.userData.speed = 0.1 + Math.random() * 0.2;
       enemyCars.push(enemyCar);
       scene.add(enemyCar);
@@ -325,6 +366,9 @@
     const scoreDisplay = document.getElementById("scoreDisplay");
     let gameOver = false;
     const gameOverPopup = document.getElementById("gameOverPopup");
+    document.getElementById("replayButton").addEventListener("click", () => {
+      location.reload();
+    });
     
     // === Collision Detection Function ===
     function checkCollision(obj1, obj2, threshold) {
@@ -369,7 +413,6 @@
           enemyCar.position.x = potentialX;
           enemyCar.position.z = potentialZ;
         } else {
-          // Choose a new random cardinal direction if blocked.
           enemyCar.userData.direction = cardinalDirections[Math.floor(Math.random() * cardinalDirections.length)].clone();
         }
         const enemyAngle = Math.atan2(enemyCar.userData.direction.y, enemyCar.userData.direction.x) - Math.PI / 2;
@@ -385,7 +428,7 @@
       // --- Update Camera to Follow Player's Car ---
       camera.position.x = playerCar.position.x;
       camera.position.z = playerCar.position.z;
-      camera.position.y = 80;
+      camera.position.y = 40;
       camera.lookAt(playerCar.position);
       
       renderer.render(scene, camera);
@@ -397,11 +440,6 @@
       camera.aspect = container.clientWidth / container.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(container.clientWidth, container.clientHeight);
-    });
-    
-    // === Replay Button Event Listener ===
-    document.getElementById("replayButton").addEventListener("click", () => {
-      location.reload();
     });
   </script>
 </body>
