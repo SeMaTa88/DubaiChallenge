@@ -13,6 +13,15 @@ const pelletGroup = new THREE.Group();
 scene.add(mazeGroup);
 scene.add(pelletGroup);
 
+// آرایه‌ای از URL تصاویر Unsplash برای ساختمان‌های مدرن
+const textureURLs = [
+  'https://source.unsplash.com/300x200/?modern,skyscraper',
+  'https://source.unsplash.com/300x200/?modern,building',
+  'https://source.unsplash.com/300x200/?skyscraper,city',
+  'https://source.unsplash.com/300x200/?architecture,skyscraper',
+  'https://source.unsplash.com/300x200/?urban,modern'
+];
+
 // تعریف نقشه بازی به صورت آرایه (1: ساختمان، 2: خوراکی، 0: فضای خالی)
 const maze = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -24,6 +33,7 @@ const maze = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1]
 ];
 const wallSize = 4;
+const textureLoader = new THREE.TextureLoader();
 
 // ایجاد ساختمان‌ها و خوراکی‌ها بر اساس آرایه maze
 for (let i = 0; i < maze.length; i++) {
@@ -36,8 +46,16 @@ for (let i = 0; i < maze.length; i++) {
       const buildingDepth = wallSize * 0.5; // عمق ساختمان
       const buildingHeight = 20; // ارتفاع ساختمان
       const geometry = new THREE.BoxGeometry(buildingWidth, buildingHeight, buildingDepth);
-      // استفاده از یک ماده مدرن با رنگ خاکستری و درخشندگی بیشتر
-      const material = new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 100 });
+      
+      // انتخاب تصادفی یک تصویر از آرایه textureURLs
+      const randomIndex = Math.floor(Math.random() * textureURLs.length);
+      const textureURL = textureURLs[randomIndex];
+      
+      // بارگذاری تکسچر از Unsplash
+      const texture = textureLoader.load(textureURL);
+      
+      // استفاده از تکسچر به عنوان map در ماده
+      const material = new THREE.MeshPhongMaterial({ map: texture, shininess: 100 });
       const building = new THREE.Mesh(geometry, material);
       building.position.set(x, buildingHeight / 2, z);
       mazeGroup.add(building);
