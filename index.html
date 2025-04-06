@@ -2,448 +2,576 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>3D City Maze - Benz-Style Cars</title>
+  <title>3D Pacman City: Neon High-Tech Chase</title>
   <style>
-    body {
+    /* Basic CSS reset */
+    body, html {
       margin: 0;
       overflow: hidden;
-      background-color: #111;
-      font-family: Arial, sans-serif;
+      background-color: #000;
     }
-    #container {
-      width: 100vw;
-      height: 100vh;
-      position: relative;
+    canvas {
+      display: block;
     }
-    /* Score Display */
-    #scoreDisplay {
+    #overlay {
       position: absolute;
       top: 10px;
       left: 10px;
       color: #fff;
-      font-size: 1.5em;
-      z-index: 5;
+      font-family: Arial, sans-serif;
+      z-index: 100;
     }
-    /* Game Over Overlay */
-    #gameOverPopup {
+    #timer {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      z-index: 100;
+      font-size: 18px;
+    }
+    /* Game Over and Win Panels */
+    #gameover, #win {
+      display: none;
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0,0,0,0.8);
-      color: white;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      z-index: 10;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 200;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding-top: 20%;
     }
-    #gameOverPopup button {
-      margin-top: 20px;
+    #gameover button, #win button {
       padding: 10px 20px;
-      font-size: 1.2em;
+      font-size: 18px;
       cursor: pointer;
+      margin-top: 20px;
     }
   </style>
 </head>
 <body>
-  <div id="container">
-    <div id="scoreDisplay">Score: 0</div>
-    <div id="gameOverPopup">
-      <div style="font-size: 3em;">Game Over</div>
-      <button id="replayButton">Replay</button>
-    </div>
+  <div id="overlay">
+    Use arrow keys to move your car (Pacman) &amp; collect Bitcoins!
   </div>
-  
-  <!-- Load Three.js from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <div id="timer">Time: 0s</div>
+  <div id="gameover">
+    <h1>Game Over</h1>
+    <button onclick="restartGame()">Replay</button>
+  </div>
+  <div id="win"></div>
+  <!-- Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script>
-    // ---------------- Add Background Sound ----------------
-    const backgroundSound = new Audio('Sound/DubaiTown.mp3');
-    backgroundSound.loop = true;
-    // Optional: Adjust volume (0.0 to 1.0)
-    backgroundSound.volume = 0.5;
-    backgroundSound.play().catch(err => {
-      console.error("Autoplay prevented: ", err);
-    });
-    
-    // ---------------- Global Time Start ----------------
+    // --- Global variables ---
+    let scene, camera, renderer;
+    let pacman, pacmanSpeed = 0.2;
+    const ghosts = []; // holds ghost objects { mesh, speed, direction }
+    const ghostSpeeds = [0.15, 0.2, 0.25];
+    const coins = []; // collectible Bitcoin objects
+    let gameOver = false;
+    let accident = false; // indicates accident animation is active
+    let accidentTime = 0; // elapsed time during accident animation
     let startTime = Date.now();
-    
-    // ---------------- Scene, Camera, Renderer Setup ----------------
-    const container = document.getElementById('container');
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x202020);
-    
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      1000
-    );
-    // Position camera closer for a larger view of objects.
-    camera.position.set(0, 40, 0);
-    
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    container.appendChild(renderer.domElement);
-    
-    // ---------------- Lights ----------------
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(20, 40, 20);
-    scene.add(directionalLight);
-    
-    // ---------------- Custom City Map Layout ----------------
-    const cityMap = [
-      "############################",
-      "#............##............#",
-      "#.####.#####.##.#####.####.#",
-      "#o####.#####.##.#####.####o#",
-      "#.####.#####.##.#####.####.#",
-      "#..........................#",
-      "#.####.##.########.##.####.#",
-      "#.####.##.########.##.####.#",
-      "#......##....##....##......#",
-      "######.##### ## #####.######",
-      "     #.##### ## #####.#     ",
-      "     #.##          ##.#     ",
-      "     #.## ###--### ##.#     ",
-      "######.## #      # ##.######",
-      "      .   #      #   .      ",
-      "######.## #      # ##.######",
-      "     #.## ######## ##.#     ",
-      "     #.##          ##.#     ",
-      "     #.## ######## ##.#     ",
-      "######.## ######## ##.######",
-      "#............##............#",
-      "#.####.#####.##.#####.####.#",
-      "#o####.#####.##.#####.####o#",
-      "#...##................##...#",
-      "###.##.##.########.##.##.###",
-      "#......##....##....##......#",
-      "############################"
+    const particles = []; // array to hold particle effects
+    const clock = new THREE.Clock(); // for delta time
+
+    // Audio
+    let backgroundSound;
+
+    // Maze: 0: open street, 1: building
+    const maze = [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
+      [1,0,1,1,1,0,0,1,0,1,1,1,1,0,1],
+      [1,0,1,0,0,0,1,1,0,1,0,0,1,0,1],
+      [1,0,1,0,1,0,0,0,0,1,0,1,1,0,1],
+      [1,0,0,0,1,1,1,1,0,1,0,0,0,0,1],
+      [1,1,1,0,0,0,0,1,0,1,1,1,0,1,1],
+      [1,0,0,0,1,1,0,0,0,0,0,1,0,0,1],
+      [1,0,1,1,1,0,0,1,1,1,0,1,1,0,1],
+      [1,0,0,0,0,0,1,1,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
     ];
-    const tileSize = 5;
-    const mapRows = cityMap.length;   // 26 rows
-    const mapCols = cityMap[0].length;  // 28 columns
-    
-    // ---------------- Helper Functions ----------------
-    function getGridCell(x, z) {
-      const originX = - (mapCols * tileSize) / 2;
-      const originZ = - (mapRows * tileSize) / 2;
-      const col = Math.floor((x - originX) / tileSize);
-      const row = Math.floor((z - originZ) / tileSize);
-      return { row, col };
+    const mazeRows = maze.length;
+    const mazeCols = maze[0].length;
+    const cellSize = 4; // size of each grid cell
+
+    // --- Particle system functions ---
+    // Spawn a single particle at (x, y, z) with given velocity and lifespan (seconds)
+    function spawnParticle(x, y, z, velocity, lifespan) {
+      // Particle size increased 3x: radius 0.3
+      const geometry = new THREE.SphereGeometry(0.3, 8, 8);
+      const material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 });
+      const particle = new THREE.Mesh(geometry, material);
+      particle.position.set(x, y, z);
+      scene.add(particle);
+      particles.push({ mesh: particle, velocity: velocity, lifespan: lifespan });
     }
-    function isStreet(x, z) {
-      const cell = getGridCell(x, z);
-      if (cell.row < 0 || cell.row >= mapRows || cell.col < 0 || cell.col >= mapCols) {
-        return false;
-      }
-      return cityMap[cell.row][cell.col] !== "#";
-    }
-    
-    // ---------------- Create Buildings ----------------
-    const cityGroup = new THREE.Group();
-    const buildingMaterial = new THREE.MeshPhongMaterial({
-      color: 0x0077be,
-      opacity: 0.85,
-      transparent: true,
-      shininess: 150
-    });
-    for (let row = 0; row < mapRows; row++) {
-      for (let col = 0; col < mapCols; col++) {
-        if (cityMap[row][col] === "#") {
-          const buildingHeight = tileSize * (2 + Math.random() * 3);
-          const geometry = new THREE.BoxGeometry(tileSize, buildingHeight, tileSize);
-          const building = new THREE.Mesh(geometry, buildingMaterial.clone());
-          building.material.color.setHSL(Math.random() * 0.1 + 0.55, 0.8, 0.5);
-          building.position.x = (col - mapCols / 2) * tileSize + tileSize / 2;
-          building.position.z = (row - mapRows / 2) * tileSize + tileSize / 2;
-          building.position.y = buildingHeight / 2;
-          cityGroup.add(building);
-    
-          const edges = new THREE.EdgesGeometry(geometry);
-          const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff });
-          const outline = new THREE.LineSegments(edges, lineMaterial);
-          outline.position.copy(building.position);
-          cityGroup.add(outline);
+    // Update particles and remove expired ones
+    function updateParticles(deltaTime) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.mesh.position.add(p.velocity.clone().multiplyScalar(deltaTime));
+        p.lifespan -= deltaTime;
+        p.mesh.material.opacity = Math.max(p.lifespan / 1.0, 0); // assuming initial lifespan ~1 sec
+        if(p.lifespan <= 0) {
+          scene.remove(p.mesh);
+          particles.splice(i, 1);
         }
       }
     }
-    scene.add(cityGroup);
-    
-    // ---------------- Create Streets and Neon Street Lines ----------------
-    const streetWidth = mapCols * tileSize;
-    const streetDepth = mapRows * tileSize;
-    const streetGeometry = new THREE.PlaneGeometry(streetWidth, streetDepth);
-    const streetMaterial = new THREE.MeshPhongMaterial({ color: 0x2a2a2a });
-    const street = new THREE.Mesh(streetGeometry, streetMaterial);
-    street.rotation.x = -Math.PI / 2;
-    street.position.y = 0.01;
-    scene.add(street);
-    
-    const streetLines = new THREE.Group();
-    const originX = - (mapCols * tileSize) / 2;
-    const originZ = - (mapRows * tileSize) / 2;
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-    const margin = 0.5; // margin inside the cell
-    for (let row = 0; row < mapRows; row++) {
-      for (let col = 0; col < mapCols; col++) {
-        if (cityMap[row][col] !== "#") {
-          const cx = originX + col * tileSize + tileSize / 2;
-          const cz = originZ + row * tileSize + tileSize / 2;
-          let points = [];
-          const leftOpen = col > 0 && cityMap[row][col-1] !== "#";
-          const rightOpen = col < mapCols-1 && cityMap[row][col+1] !== "#";
-          if (leftOpen || rightOpen) {
-            points.push(new THREE.Vector3(cx - tileSize/2 + margin, 0.05, cz));
-            points.push(new THREE.Vector3(cx + tileSize/2 - margin, 0.05, cz));
-          }
-          const topOpen = row > 0 && cityMap[row-1][col] !== "#";
-          const bottomOpen = row < mapRows-1 && cityMap[row+1][col] !== "#";
-          if (topOpen || bottomOpen) {
-            points.push(new THREE.Vector3(cx, 0.05, cz - tileSize/2 + margin));
-            points.push(new THREE.Vector3(cx, 0.05, cz + tileSize/2 - margin));
-          }
-          if (points.length > 0) {
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const cellLine = new THREE.LineSegments(geometry, lineMaterial);
-            streetLines.add(cellLine);
-          }
-        }
+    // Spawn an explosion effect at (x,y,z)
+    function spawnExplosion(x, y, z) {
+      for (let i = 0; i < 50; i++) {
+        let vel = new THREE.Vector3(
+          (Math.random()-0.5)*1,
+          (Math.random()-0.5)*1,
+          (Math.random()-0.5)*1
+        );
+        spawnParticle(x, y, z, vel, 1.0);
       }
     }
-    scene.add(streetLines);
-    
-    // ---------------- Create Floor (Sidewalks) ----------------
-    const floorGeometry = new THREE.PlaneGeometry(streetWidth, streetDepth);
-    const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x111111 });
-    const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
-    floorMesh.rotation.x = -Math.PI / 2;
-    floorMesh.position.y = 0;
-    scene.add(floorMesh);
-    
-    // ---------------- Create Enhanced Bitcoin Coins ----------------
-    const coinsGroup = new THREE.Group();
-    const coinGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 32); // 2x bigger
-    const coinMaterial = new THREE.MeshPhongMaterial({ 
-      color: 0xffd700,
-      emissive: 0xffd700,
-      emissiveIntensity: 0.6,
-      flatShading: true
-    });
-    function createCoin() {
-      const coin = new THREE.Mesh(coinGeometry, coinMaterial);
-      coin.rotation.x = 0; // remain flat
-      const ringGeo = new THREE.RingGeometry(0.3, 0.5, 32);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.11;
-      coin.add(ring);
-      return coin;
-    }
-    for (let row = 0; row < mapRows; row++) {
-      for (let col = 0; col < mapCols; col++) {
-        if (cityMap[row][col] !== "#") {
-          if (Math.random() < 0.1) { // 10% chance per open cell
-            const coin = createCoin();
-            coin.position.x = originX + col * tileSize + tileSize / 2;
-            coin.position.z = originZ + row * tileSize + tileSize / 2;
-            coin.position.y = 1;
-            coinsGroup.add(coin);
-          }
-        }
+
+    // --- Helper: add neon outline to an object ---
+    function addNeonOutline(object, color = 0x00ffff) {
+      if(object.isMesh && object.geometry) {
+        const geo = new THREE.EdgesGeometry(object.geometry);
+        const mat = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
+        const wireframe = new THREE.LineSegments(geo, mat);
+        object.add(wireframe);
+      }
+      if(object.isGroup) {
+        object.children.forEach(child => addNeonOutline(child, color));
       }
     }
-    scene.add(coinsGroup);
-    
-    // ---------------- Benz-Style Car Model (Player's Car & Enemy Cars) ----------------
-    function createBenzCar() {
+
+    // --- Create a detailed car as a THREE.Group ---
+    function createCar(color) {
       const carGroup = new THREE.Group();
+      // Dimensions
+      const carLength = cellSize * 0.6;
+      const carWidth = cellSize * 0.4;
+      const carHeight = cellSize * 0.3;
       
-      // Car Body: Longer and elegant.
-      const bodyGeometry = new THREE.BoxGeometry(3, 0.7, 6);
-      const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, flatShading: true });
-      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-      body.position.y = 0.9;
-      carGroup.add(body);
+      // Car body
+      const bodyGeometry = new THREE.BoxGeometry(carLength, carHeight, carWidth);
+      const bodyMaterial = new THREE.MeshStandardMaterial({ color: color });
+      const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      carGroup.add(bodyMesh);
       
-      // Car Roof/Cabin: Slightly smaller box.
-      const roofGeometry = new THREE.BoxGeometry(2.5, 0.3, 4);
-      const roofMaterial = new THREE.MeshPhongMaterial({ color: 0x333333, flatShading: true });
-      const roof = new THREE.Mesh(roofGeometry, roofMaterial);
-      roof.position.set(0, 1.4, 0);
-      carGroup.add(roof);
+      // Sunroof (a thin, dark box on top)
+      const sunroofGeometry = new THREE.BoxGeometry(carLength * 0.5, 0.05, carWidth * 0.8);
+      const sunroofMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+      const sunroofMesh = new THREE.Mesh(sunroofGeometry, sunroofMaterial);
+      sunroofMesh.position.set(0, carHeight/2 + 0.05/2, 0);
+      carGroup.add(sunroofMesh);
       
-      // Wheels: Use cylinders.
-      const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 16);
-      const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
-      function addWheel(x, z) {
+      // Front grill detail
+      const grillGeometry = new THREE.BoxGeometry(0.1, carHeight * 0.4, carWidth * 0.6);
+      const grillMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
+      const grillMesh = new THREE.Mesh(grillGeometry, grillMaterial);
+      grillMesh.position.set(carLength/2 + 0.05, 0, 0);
+      carGroup.add(grillMesh);
+      
+      // Wheels (four cylinders)
+      const wheelRadius = 0.12;
+      const wheelThickness = 0.05;
+      const wheelGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelThickness, 16);
+      const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+      
+      function addWheel(x, y, z) {
         const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(x, 0.5, z);
+        wheel.rotation.z = Math.PI/2;
+        wheel.position.set(x, y, z);
         carGroup.add(wheel);
+        addNeonOutline(wheel, 0xffffff);
       }
-      addWheel(-1.2, -2.2);
-      addWheel(1.2, -2.2);
-      addWheel(-1.2, 2.2);
-      addWheel(1.2, 2.2);
+      const xOffset = carLength/2 - 0.05;
+      const zOffset = carWidth/2 + 0.01;
+      const yWheel = -carHeight/2 + wheelRadius;
+      addWheel( xOffset, yWheel,  zOffset);
+      addWheel( xOffset, yWheel, -zOffset);
+      addWheel(-xOffset, yWheel,  zOffset);
+      addWheel(-xOffset, yWheel, -zOffset);
       
-      // Headlights: small spheres.
-      const headlightGeometry = new THREE.SphereGeometry(0.2, 16, 16);
-      const headlightMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-      function addHeadlight(x, z) {
-        const headlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
-        headlight.position.set(x, 0.8, z);
-        carGroup.add(headlight);
-      }
-      addHeadlight(-0.9, -3.1);
-      addHeadlight(0.9, -3.1);
-      
+      // 90° rotation offset so forward aligns with street movement.
+      carGroup.rotation.y = Math.PI/2;
+      addNeonOutline(carGroup, 0xffffff);
       return carGroup;
     }
-    
-    // ---------------- Create Player's Car (Benz-Style, Yellow) ----------------
-    const playerCar = createBenzCar();
-    // Place player's car at the center of the maze.
-    playerCar.position.set(0, 0, 0);
-    scene.add(playerCar);
-    
-    // ---------------- Create Enemy Cars (Non-Yellow Benz-Style) ----------------
-    const enemyCarColors = [0xff073a, 0xff66cc, 0x00ffff, 0xffa500];
-    const enemyCars = [];
-    const cardinalDirections = [
-      new THREE.Vector2(1, 0),
-      new THREE.Vector2(-1, 0),
-      new THREE.Vector2(0, 1),
-      new THREE.Vector2(0, -1)
-    ];
-    function createEnemyCar(color) {
-      const car = createBenzCar();
-      // Change the car body color (assume the first mesh with width==3 is the body).
-      car.traverse(child => {
-        if (child.isMesh && child.geometry.parameters && child.geometry.parameters.width === 3) {
-          child.material = child.material.clone();
-          child.material.color.set(color);
-        }
-      });
-      const dir = cardinalDirections[Math.floor(Math.random() * cardinalDirections.length)].clone();
-      car.userData.direction = dir;
-      return car;
-    }
-    for (let i = 0; i < 4; i++) {
-      const enemyCar = createEnemyCar(enemyCarColors[i]);
-      enemyCar.position.set((i - 1.5) * 10, 0, -10);
-      enemyCar.userData.speed = 0.1 + Math.random() * 0.2;
-      enemyCars.push(enemyCar);
-      scene.add(enemyCar);
-    }
-    
-    // ---------------- Movement Control for Player's Car ----------------
-    let carDirection = new THREE.Vector2(1, 0); // Default: moving right.
-    const moveSpeed = 0.2;
-    window.addEventListener("keydown", (e) => {
-      e.preventDefault();
-      switch (e.key) {
-        case "ArrowLeft":
-          carDirection.set(-1, 0);
-          break;
-        case "ArrowRight":
-          carDirection.set(1, 0);
-          break;
-        case "ArrowUp":
-          carDirection.set(0, -1);
-          break;
-        case "ArrowDown":
-          carDirection.set(0, 1);
-          break;
+
+    // --- Accident Animation ---
+    // This function gradually rotates and scales down Pacman to simulate a crash.
+    function animateAccident(deltaTime) {
+      accidentTime += deltaTime;
+      // Rotate around the X axis to simulate falling
+      pacman.rotation.x += deltaTime * Math.PI; 
+      // Scale down the car gradually
+      const scaleFactor = Math.max(1 - deltaTime * 0.5, 0.1);
+      pacman.scale.multiplyScalar(scaleFactor);
+      // Optionally spawn extra explosion particles during the accident
+      spawnExplosion(pacman.position.x, pacman.position.y, pacman.position.z);
+      // After 1.5 seconds, finish the accident and trigger game over
+      if (accidentTime > 1.5) {
+        triggerGameOver();
       }
-    });
-    
-    // ---------------- Score & Game Over Handling ----------------
-    let score = 0;
-    const scoreDisplay = document.getElementById("scoreDisplay");
-    let gameOver = false;
-    const gameOverPopup = document.getElementById("gameOverPopup");
-    document.getElementById("replayButton").addEventListener("click", () => {
-      location.reload();
-    });
-    
-    // ---------------- Collision Detection ----------------
-    function checkCollision(obj1, obj2, threshold) {
-      const dx = obj1.position.x - obj2.position.x;
-      const dz = obj1.position.z - obj2.position.z;
-      return Math.sqrt(dx * dx + dz * dz) < threshold;
     }
-    
-    // ---------------- Animation Loop ----------------
-    function animate() {
-      if (gameOver) return;
-      requestAnimationFrame(animate);
+
+    // --- Initialize the scene ---
+    function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x20232a);
       
-      // Update player's car movement.
-      const newX = playerCar.position.x + carDirection.x * moveSpeed;
-      const newZ = playerCar.position.z + carDirection.y * moveSpeed;
-      if (isStreet(newX, newZ)) {
-        playerCar.position.x = newX;
-        playerCar.position.z = newZ;
-      }
-      const angle = Math.atan2(carDirection.y, carDirection.x) - Math.PI / 2;
-      playerCar.rotation.y = angle;
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 40, 0);
+      camera.up.set(0, 0, -1);
       
-      // Check for coin collection.
-      coinsGroup.children = coinsGroup.children.filter(coin => {
-        if (checkCollision(playerCar, coin, 1.5)) {
-          score += 10;
-          scoreDisplay.innerHTML = "Score: " + score;
-          scene.remove(coin);
-          return false;
-        }
-        return true;
+      renderer = new THREE.WebGLRenderer({antialias: true});
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // --- Add Audio Listener and load background sound ---
+      const listener = new THREE.AudioListener();
+      camera.add(listener);
+      backgroundSound = new THREE.Audio(listener);
+      const audioLoader = new THREE.AudioLoader();
+      audioLoader.load('Sound/DubaiTown.mp3', function(buffer) {
+        backgroundSound.setBuffer(buffer);
+        backgroundSound.setLoop(true);
+        backgroundSound.setVolume(0.5);
+        backgroundSound.play();
       });
-      
-      // Update enemy cars.
-      enemyCars.forEach(enemyCar => {
-        const currentDir = enemyCar.userData.direction;
-        const potentialX = enemyCar.position.x + currentDir.x * enemyCar.userData.speed;
-        const potentialZ = enemyCar.position.z + currentDir.y * enemyCar.userData.speed;
-        if (isStreet(potentialX, potentialZ)) {
-          enemyCar.position.x = potentialX;
-          enemyCar.position.z = potentialZ;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      directionalLight.position.set(20, 50, 20);
+      scene.add(directionalLight);
+
+      // Ground (street)
+      const groundGeometry = new THREE.PlaneGeometry(mazeCols * cellSize, mazeRows * cellSize);
+      const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
+      const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+      addNeonOutline(ground, 0xffffff);
+
+      buildMaze();
+      drawNeonRoadLines();
+      placeCoins();
+
+      // Create Pacman as a high-tech car
+      pacman = createCar(0xffff00);
+      pacman.position.set(cellSize + cellSize/2, cellSize * 0.3/2, cellSize + cellSize/2);
+      scene.add(pacman);
+
+      // Create three ghost cars
+      const ghostColors = [0xff0000, 0x00ff00, 0xff00ff];
+      for (let i = 0; i < 3; i++) {
+        const ghostCar = createCar(ghostColors[i]);
+        let ghostX, ghostZ;
+        if(i === 0){
+          ghostX = cellSize * (mazeCols - 2) + cellSize/2;
+          ghostZ = cellSize + cellSize/2;
+        } else if(i === 1){
+          ghostX = cellSize + cellSize/2;
+          ghostZ = cellSize * (mazeRows - 2) + cellSize/2;
         } else {
-          enemyCar.userData.direction = cardinalDirections[Math.floor(Math.random() * cardinalDirections.length)].clone();
+          ghostX = cellSize * (mazeCols - 2) + cellSize/2;
+          ghostZ = cellSize * (mazeRows - 2) + cellSize/2;
         }
-        const enemyAngle = Math.atan2(enemyCar.userData.direction.y, enemyCar.userData.direction.x) - Math.PI / 2;
-        enemyCar.rotation.y = enemyAngle;
-        
-        // Check collision with player's car.
-        if (checkCollision(playerCar, enemyCar, 2)) {
-          gameOver = true;
-          gameOverPopup.style.display = "flex";
+        ghostCar.position.set(ghostX, cellSize * 0.3/2, ghostZ);
+        scene.add(ghostCar);
+        const directions = [
+          {dx: 0, dz: -1},
+          {dx: 0, dz: 1},
+          {dx: -1, dz: 0},
+          {dx: 1, dz: 0}
+        ];
+        const initDir = directions[Math.floor(Math.random()*directions.length)];
+        ghosts.push({ mesh: ghostCar, speed: ghostSpeeds[i], direction: initDir });
+      }
+
+      window.addEventListener('resize', onWindowResize, false);
+      window.addEventListener('keydown', onDocumentKeyDown, false);
+      window.addEventListener('keyup', onDocumentKeyUp, false);
+
+      startTime = Date.now();
+      animate();
+    }
+
+    // --- Build maze with modern towers (blue tonality) ---
+    function buildMaze() {
+      const towerColors = [0x1e90ff, 0x4169e1, 0x4682b4, 0x87cefa, 0x00bfff];
+      for (let row = 0; row < mazeRows; row++) {
+        for (let col = 0; col < mazeCols; col++) {
+          if (maze[row][col] === 1) {
+            const heightMultiplier = Math.random() * 6 + 4;
+            const towerHeight = cellSize * heightMultiplier;
+            const towerGeometry = new THREE.BoxGeometry(cellSize, towerHeight, cellSize);
+            const color = towerColors[Math.floor(Math.random()*towerColors.length)];
+            const towerMaterial = new THREE.MeshStandardMaterial({ 
+              color: color, 
+              transparent: true, 
+              opacity: 0.6 
+            });
+            const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+            tower.position.set(col * cellSize + cellSize/2, towerHeight/2, row * cellSize + cellSize/2);
+            scene.add(tower);
+            addNeonOutline(tower, 0xffffff);
+          }
+        }
+      }
+    }
+
+    // --- Draw neon dash road lines between open cells ---
+    function drawNeonRoadLines() {
+      const positions = [];
+      for (let row = 0; row < mazeRows; row++) {
+        for (let col = 0; col < mazeCols; col++) {
+          if (maze[row][col] === 0) {
+            const x = col * cellSize + cellSize/2;
+            const z = row * cellSize + cellSize/2;
+            if(col < mazeCols - 1 && maze[row][col+1] === 0) {
+              const x2 = (col+1) * cellSize + cellSize/2;
+              positions.push(x, 0.15, z, x2, 0.15, z);
+            }
+            if(row < mazeRows - 1 && maze[row+1][col] === 0) {
+              const z2 = (row+1) * cellSize + cellSize/2;
+              positions.push(x, 0.15, z, x, 0.15, z2);
+            }
+          }
+        }
+      }
+      const roadGeometry = new THREE.BufferGeometry();
+      roadGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const roadMaterial = new THREE.LineDashedMaterial({
+        color: 0x00ffff,
+        dashSize: 1,
+        gapSize: 1,
+        linewidth: 2
+      });
+      const roadLines = new THREE.LineSegments(roadGeometry, roadMaterial);
+      roadLines.computeLineDistances();
+      scene.add(roadLines);
+      addNeonOutline(roadLines, 0xffffff);
+    }
+
+    // --- Place collectible Bitcoins (animated coins) ---
+    function placeCoins() {
+      const coinGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.3, 32);
+      const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+      for (let row = 0; row < mazeRows; row++) {
+        for (let col = 0; col < mazeCols; col++) {
+          if (maze[row][col] === 0 && Math.random() < 0.5) {
+            const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+            coin.position.set(col * cellSize + cellSize/2, 0.3, row * cellSize + cellSize/2);
+            coin.rotation.x = Math.PI / 2;
+            scene.add(coin);
+            coins.push(coin);
+            addNeonOutline(coin, 0xffffff);
+          }
+        }
+      }
+    }
+
+    // --- Handle window resize ---
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // --- Keyboard controls for Pacman movement ---
+    const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+    function onDocumentKeyDown(event) {
+      if(keys.hasOwnProperty(event.key)) {
+        keys[event.key] = true;
+      }
+    }
+    function onDocumentKeyUp(event) {
+      if(keys.hasOwnProperty(event.key)) {
+        keys[event.key] = false;
+      }
+    }
+
+    // --- Check collision with walls ---
+    function isCellBlocked(x, z) {
+      const col = Math.floor(x / cellSize);
+      const row = Math.floor(z / cellSize);
+      if (row < 0 || row >= mazeRows || col < 0 || col >= mazeCols) return true;
+      return maze[row][col] === 1;
+    }
+
+    // --- Move Pacman and collect coins ---
+    function movePacman() {
+      let dx = 0, dz = 0;
+      if (keys['ArrowUp']) dz = -pacmanSpeed;
+      if (keys['ArrowDown']) dz = pacmanSpeed;
+      if (keys['ArrowLeft']) dx = -pacmanSpeed;
+      if (keys['ArrowRight']) dx = pacmanSpeed;
+
+      const newX = pacman.position.x + dx;
+      const newZ = pacman.position.z + dz;
+      if (!isCellBlocked(newX, newZ)) {
+        pacman.position.x = newX;
+        pacman.position.z = newZ;
+        if(dx !== 0 || dz !== 0){
+          pacman.rotation.y = Math.PI/2 + Math.atan2(-dx, -dz);
+          // Spawn a trailing particle when Pacman moves.
+          const randomVel = new THREE.Vector3(
+            (Math.random()-0.5)*0.2,
+            Math.random()*0.2,
+            (Math.random()-0.5)*0.2
+          );
+          spawnParticle(pacman.position.x, pacman.position.y, pacman.position.z, randomVel, 0.5);
+        }
+      }
+      // Coin collection
+      for(let i = coins.length - 1; i >= 0; i--){
+        const coin = coins[i];
+        if(pacman.position.distanceTo(coin.position) < 1.0) {
+          scene.remove(coin);
+          coins.splice(i, 1);
+        }
+      }
+    }
+
+    // --- Move Ghosts ---
+    function moveGhosts() {
+      ghosts.forEach(ghost => {
+        const { mesh, speed, direction } = ghost;
+        const dx = direction.dx * speed;
+        const dz = direction.dz * speed;
+        const newX = mesh.position.x + dx;
+        const newZ = mesh.position.z + dz;
+        if (!isCellBlocked(newX, newZ)) {
+          mesh.position.x = newX;
+          mesh.position.z = newZ;
+        } else {
+          const directions = [
+            {dx: 0, dz: -1},
+            {dx: 0, dz: 1},
+            {dx: -1, dz: 0},
+            {dx: 1, dz: 0}
+          ];
+          const possible = directions.filter(dir => {
+            const testX = mesh.position.x + dir.dx * speed;
+            const testZ = mesh.position.z + dir.dz * speed;
+            return !isCellBlocked(testX, testZ);
+          });
+          ghost.direction = possible.length > 0 ? possible[Math.floor(Math.random() * possible.length)] : {dx: 0, dz: 0};
+        }
+        if(ghost.direction.dx !== 0 || ghost.direction.dz !== 0){
+          mesh.rotation.y = Math.PI/2 + Math.atan2(-ghost.direction.dx, -ghost.direction.dz);
         }
       });
-      
-      // Update camera to follow player's car.
-      camera.position.x = playerCar.position.x;
-      camera.position.z = playerCar.position.z;
-      camera.position.y = 40;
-      camera.lookAt(playerCar.position);
-      
+    }
+
+    // --- Animate coins (rotation and bobbing) ---
+    function animateCoins() {
+      coins.forEach(coin => {
+        coin.rotation.z += 0.02;
+        coin.position.y = 0.3 + Math.sin(Date.now() * 0.005) * 0.1;
+      });
+    }
+
+    // --- Check collision between Pacman and any Ghost ---
+    function checkCollisions() {
+      ghosts.forEach(ghost => {
+        if(pacman.position.distanceTo(ghost.mesh.position) < 1.0 && !accident) {
+          // Start accident animation instead of immediate game over
+          startAccidentAnimation();
+        }
+      });
+    }
+
+    // --- Start Accident Animation ---
+    function startAccidentAnimation() {
+      accident = true;
+      accidentTime = 0;
+      // Spawn an explosion at the moment of collision
+      spawnExplosion(pacman.position.x, pacman.position.y, pacman.position.z);
+    }
+
+    // --- Animate accident (rotate and scale down Pacman) ---
+    function animateAccident(deltaTime) {
+      accidentTime += deltaTime;
+      // Rotate Pacman along the X-axis (simulate falling)
+      pacman.rotation.x += deltaTime * Math.PI;
+      // Gradually scale down the Pacman car
+      const scaleFactor = Math.max(1 - deltaTime * 0.5, 0.1);
+      pacman.scale.multiplyScalar(scaleFactor);
+      // Spawn extra explosion particles continuously
+      spawnExplosion(pacman.position.x, pacman.position.y, pacman.position.z);
+      // After 1.5 seconds, finalize accident and trigger game over
+      if (accidentTime > 1.5) {
+        triggerGameOver();
+      }
+    }
+
+    // --- Trigger Game Over ---
+    function triggerGameOver() {
+      gameOver = true;
+      document.getElementById('gameover').style.display = 'block';
+      if(backgroundSound && backgroundSound.isPlaying) {
+        backgroundSound.stop();
+      }
+    }
+
+    // --- Trigger Win when all coins are collected and show record time ---
+    function checkWinCondition() {
+      if(coins.length === 0 && !gameOver) {
+        gameOver = true;
+        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const winPanel = document.getElementById('win');
+        winPanel.innerHTML = `<h1>You Win!</h1><p>Record Time: ${elapsedSeconds} s</p><button onclick="restartGame()">Replay</button>`;
+        winPanel.style.display = 'block';
+        if(backgroundSound && backgroundSound.isPlaying) {
+          backgroundSound.stop();
+        }
+      }
+    }
+
+    // --- Update timer overlay ---
+    function updateTimer() {
+      const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+      document.getElementById('timer').textContent = "Time: " + elapsedSeconds + "s";
+    }
+
+    // --- Main animation loop ---
+    function animate() {
+      if(gameOver) return;
+      const deltaTime = clock.getDelta();
+      requestAnimationFrame(animate);
+      // If accident animation is active, update it
+      if (accident) {
+        animateAccident(deltaTime);
+      } else {
+        movePacman();
+      }
+      moveGhosts();
+      animateCoins();
+      updateParticles(deltaTime);
+      checkCollisions();
+      checkWinCondition();
+      updateTimer();
+      const camHeight = 40;
+      camera.position.set(pacman.position.x, camHeight, pacman.position.z);
+      camera.lookAt(pacman.position);
       renderer.render(scene, camera);
     }
-    animate();
-    
-    // ---------------- Handle Window Resize ----------------
-    window.addEventListener("resize", () => {
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
-    });
+
+    // --- Restart the game (reloads the page) ---
+    function restartGame() {
+      location.reload();
+    }
+
+    // --- Start the game ---
+    init();
   </script>
 </body>
 </html>
